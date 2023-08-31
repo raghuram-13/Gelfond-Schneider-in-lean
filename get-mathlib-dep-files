@@ -1,0 +1,34 @@
+#!/bin/sh
+
+# Prints a list of Mathlib/.../...lean files directly depended on by
+# files in the project.
+# Limitations:
+# + No 'import Mathlib...' should be split across multiple lines (any
+#   that are will be missed).
+# + Every line with 'import Mathlib...'s must contain nothing other
+#   than 'import Mathlib...'s. (If not, the script breaks.)
+
+# Example use:
+# 	./get-mathlib-dep-files | xargs lake exe cache get
+
+(
+# Note if editing: no /'s in this regex, since we put it in a sed command
+import_mathlib_regex='import[[:space:]]\+\(Mathlib\(\.[^.[:space:]]\+\)*\)'
+
+cd "$(dirname "$0")"
+
+# Find all 'our' .lean files
+find GelfondSchneider/ GelfondSchneider.lean -type f -name '*.lean' -execdir \
+sed -n /"$import_mathlib_regex"/'{ # Filter to lines with import Mathlib... in them
+  # Trim surrounding whitespace from each such line
+  s|^[[:space:]]*\(.*?\)[[:space:]]*$|\1|;b
+  # Extract the Mathlib... module name for each import Mathlib...
+  s|'"$import_mathlib_regex"'|\1|g;
+  # Split separate imports into separate lines
+  s|[[:space:]]\+|\n|g;
+  # Print, passing down the pipeline
+  p;
+}' {} + |
+# Convert module names into files suitable to pass to lake exe cache
+sed "y|.|/|; s|$|.lean|"
+)
